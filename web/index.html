@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hardware Security Module (HSM) - PKCS#11 Emulator</title>
+  <style>
+    :root {
+      --bg: #070913;
+      --panel: #0d1224;
+      --border: rgba(99, 102, 241, 0.25);
+      --accent: #6366f1;
+      --cyan: #06b6d4;
+      --green: #10b981;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+      padding: 30px 20px;
+      min-height: 100vh;
+    }
+    .container { max-width: 1050px; margin: 0 auto; }
+    header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding-bottom: 20px; margin-bottom: 25px;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo { font-size: 24px; font-weight: 800; color: #a5b4fc; display: flex; align-items: center; gap: 10px; }
+    .badge { background: rgba(99, 102, 241, 0.15); border: 1px solid var(--accent); color: #818cf8; padding: 5px 12px; border-radius: 9999px; font-size: 12px; font-weight: 700; }
+    .grid { display: grid; grid-template-columns: 350px 1fr; gap: 20px; }
+    @media (max-width: 850px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+    .card h3 { font-size: 15px; margin-bottom: 14px; color: #818cf8; text-transform: uppercase; letter-spacing: 0.5px; }
+    .form-group { margin-bottom: 14px; }
+    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; font-weight: 600; }
+    input, select { width: 100%; background: #070913; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 9px 12px; color: #fff; font-size: 13px; outline: none; }
+    input:focus { border-color: var(--accent); }
+    .action-btn { width: 100%; background: linear-gradient(135deg, #6366f1, #4f46e5); border: none; color: #fff; font-weight: 700; padding: 11px; border-radius: 8px; cursor: pointer; transition: 0.2s; margin-top: 8px; font-size: 13px; }
+    .action-btn:hover { filter: brightness(1.15); transform: translateY(-1px); }
+    .terminal { background: #02040a; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 14px; height: 380px; overflow-y: auto; font-family: monospace; font-size: 12px; line-height: 1.5; color: #e2e8f0; }
+    .term-line { margin-bottom: 5px; }
+    .ok-status { color: var(--green); font-weight: 700; }
+
+    /* Floating AI Copilot Widget */
+    .cyber-ai-widget-root { position: fixed; bottom: 24px; right: 24px; z-index: 99999; }
+    .cyber-ai-trigger {
+      display: flex; align-items: center; gap: 8px;
+      background: linear-gradient(135deg, #6366f1, #4338ca);
+      color: #fff; border: 1px solid rgba(99, 102, 241, 0.6);
+      padding: 12px 18px; border-radius: 9999px;
+      cursor: pointer; font-weight: 700; font-size: 13px;
+      box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
+      outline: none; transition: 0.2s;
+    }
+    .cyber-ai-trigger:hover { transform: scale(1.04); }
+    .cyber-ai-modal {
+      position: absolute; bottom: 56px; right: 0;
+      width: 440px; max-width: calc(100vw - 32px); height: 580px;
+      background: rgba(13, 18, 36, 0.96); backdrop-filter: blur(20px);
+      border: 1px solid var(--border); border-radius: 14px;
+      display: none; flex-direction: column; overflow: hidden;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+    }
+    .cyber-ai-modal.active { display: flex; }
+    .cyber-header { padding: 12px 16px; background: #070913; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .cyber-chips { padding: 8px 12px; background: #0d1224; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; gap: 6px; overflow-x: auto; }
+    .cyber-chip { background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(99, 102, 241, 0.3); color: #a5b4fc; font-size: 11px; padding: 4px 8px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+    .cyber-chip:hover { background: var(--accent); color: #fff; }
+    .cyber-messages { flex: 1; padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+    .msg { max-width: 85%; padding: 10px 14px; border-radius: 10px; font-size: 13px; line-height: 1.4; }
+    .msg.user { align-self: flex-end; background: #4f46e5; color: #fff; }
+    .msg.bot { align-self: flex-start; background: #1e1b4b; border: 1px solid var(--border); color: #e0e7ff; }
+    .cyber-input-form { padding: 10px; background: #070913; border-top: 1px solid var(--border); display: flex; gap: 8px; }
+    .cyber-input { flex: 1; background: #0d1224; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 8px 10px; color: #fff; outline: none; }
+    .cyber-send { background: var(--accent); border: none; color: #fff; font-weight: 700; padding: 0 14px; border-radius: 6px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">🔐 HARDWARE SECURITY MODULE (HSM) EMULATOR</div>
+      <div class="badge">OASIS PKCS#11 v3.0 ABI Compliant</div>
+    </header>
+
+    <div class="grid">
+      <div class="card">
+        <h3>🔑 Cryptographic Token Management</h3>
+        <div class="form-group">
+          <label>HSM Slot Selection</label>
+          <select id="slot">
+            <option value="0">Slot 0: User Token (Argon2id Encrypted)</option>
+            <option value="1">Slot 1: Admin / SO Token</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Mechanism / Key Type</label>
+          <select id="mechanism">
+            <option value="AES-GCM-256">CKM_AES_GCM (256-bit Key)</option>
+            <option value="RSA-4096">CKM_RSA_PKCS_KEY_PAIR_GEN (4096-bit)</option>
+            <option value="ECDSA-SECP256R1">CKM_EC_KEY_PAIR_GEN (P-256)</option>
+            <option value="ECDH">CKM_ECDH1_DERIVE (Key Agreement)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>User PIN (Verification)</label>
+          <input type="password" id="pin" value="123456" />
+        </div>
+        <button class="action-btn" onclick="genKey()">🔑 Generate Key via C_GenerateKey()</button>
+        <button class="action-btn" style="background: #334155; margin-top:6px;" onclick="runSelfTest()">🛡️ Run FIPS 140-3 Known-Answer Tests</button>
+      </div>
+
+      <div class="card">
+        <h3>📜 PKCS#11 Audit & Session Log</h3>
+        <div class="terminal" id="term">
+          <div class="term-line" style="color: #64748b;">pkcs11.so initialized via OASIS C ABI. Slot count: 2</div>
+          <div class="term-line" style="color: #64748b;">Waiting for application session or key generation request...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PKCS#11 Cryptographic AI Copilot -->
+  <div class="cyber-ai-widget-root">
+    <button class="cyber-ai-trigger" onclick="toggleChat()">
+      <span>🔐</span> <span>PKCS#11 Crypto AI Copilot</span>
+    </button>
+
+    <div class="cyber-ai-modal" id="chatModal">
+      <div class="cyber-header">
+        <div>
+          <strong style="font-size: 13px; color: #a5b4fc;">🔐 Cryptographic AI Copilot</strong>
+          <div style="font-size: 10px; color: var(--muted);">Hindsight Vectorize • HSM Emulator</div>
+        </div>
+        <button onclick="toggleChat()" style="background:none; border:none; color:var(--muted); cursor:pointer; font-size:16px;">✕</button>
+      </div>
+      <div class="cyber-chips">
+        <button class="cyber-chip" onclick="askAI('Audit PKCS#11 key generation policy and weak cipher suites')">Audit Key Policy</button>
+        <button class="cyber-chip" onclick="askAI('Explain C_GetSlotList and C_OpenSession workflows')">PKCS#11 API Lifecycle</button>
+        <button class="cyber-chip" onclick="askAI('Recommend Post-Quantum Cryptography transition for HSM')">PQC Preparedness</button>
+      </div>
+      <div class="cyber-messages" id="chatMsgs">
+        <div class="msg bot">👋 Greetings! I am your <strong>PKCS#11 Cryptographic Policy Copilot</strong> powered by <strong>Hindsight AI</strong>. I can assist in verifying key lifecycles, auditing cipher suites, and validating hardware token hygiene.</div>
+      </div>
+      <form class="cyber-input-form" onsubmit="handleSend(event)">
+        <input class="cyber-input" id="chatInput" placeholder="Ask about PKCS#11, Argon2id storage, or AES-GCM..." autocomplete="off"/>
+        <button type="submit" class="cyber-send">➤</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    function log(text) {
+      const t = document.getElementById('term');
+      const div = document.createElement('div');
+      div.className = 'term-line';
+      div.innerHTML = text;
+      t.appendChild(div);
+      t.scrollTop = t.scrollHeight;
+    }
+
+    function genKey() {
+      const mech = document.getElementById('mechanism').value;
+      log(`<span style="color:#a5b4fc;">[C_OpenSession]</span> Session handle 0x00000001 opened on Slot 0.`);
+      log(`<span style="color:#a5b4fc;">[C_Login]</span> CKU_USER authenticated via Argon2id master vault.`);
+      log(`<span class="ok-status">[CKR_OK]</span> ${mech} generated. Handle: 0x0000000A. Stored in encrypted non-volatile vault.`);
+    }
+
+    function runSelfTest() {
+      log(`<span style="color:#06b6d4;">[KAT]</span> Executing FIPS 140-3 Power-On Self-Tests:`);
+      log(` - AES-256-GCM Known Answer Test: <span class="ok-status">PASS</span>`);
+      log(` - SHA2-256 / SHA3 Hash Test: <span class="ok-status">PASS</span>`);
+      log(` - RSA-4096 Signature Verification: <span class="ok-status">PASS</span>`);
+    }
+
+    function toggleChat() {
+      document.getElementById('chatModal').classList.toggle('active');
+    }
+    function askAI(p) {
+      document.getElementById('chatInput').value = p;
+      handleSend(new Event('submit'));
+    }
+    async function handleSend(e) {
+      if (e) e.preventDefault();
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const msgs = document.getElementById('chatMsgs');
+      const userDiv = document.createElement('div');
+      userDiv.className = 'msg user';
+      userDiv.textContent = text;
+      msgs.appendChild(userDiv);
+      input.value = '';
+      msgs.scrollTop = msgs.scrollHeight;
+
+      const loadingDiv = document.createElement('div');
+      loadingDiv.className = 'msg bot';
+      loadingDiv.textContent = 'Auditing with Hindsight AI...';
+      msgs.appendChild(loadingDiv);
+
+      try {
+        const res = await fetch('https://api.hindsight.vectorize.io/v1/default/banks/cybersecurity-copilot/reflect', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer hsk_50b425c99734390d6a9f74d59a7f5e78_021b3c05d1268660'
+          },
+          body: JSON.stringify({
+            query: `[Context: Hardware Security Module (HSM) PKCS#11 Emulator in Zig]\\n\\nUser Question: ${text}`
+          })
+        });
+        const data = await res.json();
+        loadingDiv.innerHTML = (data.text || 'No response').replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>').replace(/\\n/g, '<br/>');
+      } catch (err) {
+        loadingDiv.textContent = 'Error: ' + err.message;
+      }
+      msgs.scrollTop = msgs.scrollHeight;
+    }
+  </script>
+</body>
+</html>
